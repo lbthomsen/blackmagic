@@ -37,7 +37,7 @@
 static const struct usb_device_descriptor dev_desc = {
 	.bLength = USB_DT_DEVICE_SIZE,
 	.bDescriptorType = USB_DT_DEVICE,
-	.bcdUSB = 0x0200,
+	.bcdUSB = 0x0201,
 	.bDeviceClass = 0xEF, /* Miscellaneous Device */
 	.bDeviceSubClass = 2, /* Common Class */
 	.bDeviceProtocol = 1, /* Interface Association */

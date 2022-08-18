@@ -48,7 +48,7 @@ static const struct usb_device_descriptor dev_desc = {
 #endif
 	.idVendor = 0x1D50,
 	.idProduct = 0x6018,
-	.bcdDevice = 0x0100,
+	.bcdDevice = 0x0108,
 	.iManufacturer = 1,
 	.iProduct = 2,
 	.iSerialNumber = 3,

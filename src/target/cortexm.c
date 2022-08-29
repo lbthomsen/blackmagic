@@ -688,17 +688,17 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 			DEBUG_WARN("Unhandled NXP device\n");
 		break;
 	case JEP106_MANUFACTURER_ARM:
-		if (t->part_id == 0x4c0) {        /* Cortex-M0+ ROM */
+		if (t->part_id == 0x4c0U) {        /* Cortex-M0+ ROM */
 			PROBE(lpc11xx_probe);         /* LPC8 */
-		} else if (t->part_id == 0x4c3) { /* Cortex-M3 ROM */
+		} else if (t->part_id == 0x4c3U) { /* Cortex-M3 ROM */
 			PROBE(lmi_probe);
 			PROBE(ch32f1_probe);
 			PROBE(stm32f1_probe);         /* Care for other STM32F1 clones (?) */
 			PROBE(lpc15xx_probe);         /* Thanks to JojoS for testing */
-		} else if (t->part_id == 0x471) { /* Cortex-M0 ROM */
+		} else if (t->part_id == 0x471U) { /* Cortex-M0 ROM */
 			PROBE(lpc11xx_probe);         /* LPC24C11 */
 			PROBE(lpc43xx_probe);
-		} else if (t->part_id == 0x4c4) { /* Cortex-M4 ROM */
+		} else if (t->part_id == 0x4c4U) { /* Cortex-M4 ROM */
 			PROBE(lmi_probe);
 			/* The LPC546xx and LPC43xx parts present with the same AP ROM Part
 			Number, so we need to probe both. Unfortunately, when probing for
@@ -711,7 +711,7 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 			PROBE(lpc43xx_probe);
 			PROBE(kinetis_probe); /* Older K-series */
 			PROBE(at32fxx_probe);
-		} else if (t->part_id == 0x4cb) { /* Cortex-M23 ROM */
+		} else if (t->part_id == 0x4cbU) { /* Cortex-M23 ROM */
 			PROBE(gd32f1_probe);          /* GD32E23x uses GD32F1 peripherals */
 		}
 		break;

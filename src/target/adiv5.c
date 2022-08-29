@@ -831,6 +831,9 @@ void adiv5_dp_init(ADIv5_DP_t *dp, const uint32_t idcode)
 		}
 	}
 
+	if (dp->target_designer_code == JEP106_MANUFACTURER_NXP)
+		lpc55_dp_prepare(dp);
+
 	/* Probe for APs on this DP */
 	size_t invalid_aps = 0;
 	dp->refcnt++;
@@ -857,6 +860,7 @@ void adiv5_dp_init(ADIv5_DP_t *dp, const uint32_t idcode)
 		kinetis_mdm_probe(ap);
 		nrf51_mdm_probe(ap);
 		efm32_aap_probe(ap);
+		lpc55_dmap_probe(ap);
 
 		/* Halt the device and release from reset if reset is active! */
 		if (!ap->apsel && (ap->idr & 0xfU) == ARM_AP_TYPE_AHB)

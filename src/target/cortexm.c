@@ -681,6 +681,12 @@ bool cortexm_probe(ADIv5_AP_t *ap)
 	case JEP106_MANUFACTURER_RENESAS:
 		PROBE(renesas_probe);
 		break;
+	case JEP106_MANUFACTURER_NXP:
+		if ((t->cpuid & CPUID_PARTNO_MASK) == CORTEX_M33)
+			PROBE(lpc55xx_probe);
+		else
+			DEBUG_WARN("Unhandled NXP device\n");
+		break;
 	case JEP106_MANUFACTURER_ARM:
 		if (t->part_id == 0x4c0) {        /* Cortex-M0+ ROM */
 			PROBE(lpc11xx_probe);         /* LPC8 */

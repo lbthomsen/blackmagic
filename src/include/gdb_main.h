@@ -21,6 +21,16 @@
 #ifndef INCLUDE_GDB_MAIN_H
 #define INCLUDE_GDB_MAIN_H
 
-void gdb_main(void);
+#include "target.h"
+
+#define GDB_PACKET_BUFFER_SIZE 1024U
+
+extern bool gdb_target_running;
+extern target_s *cur_target;
+
+void gdb_poll_target(void);
+void gdb_main(char *pbuf, size_t pbuf_size, size_t size);
+int gdb_main_loop(target_controller_s *tc, char *pbuf, size_t pbuf_size, size_t size, bool in_syscall);
+char *gdb_packet_buffer();
 
 #endif /* INCLUDE_GDB_MAIN_H */

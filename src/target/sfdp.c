@@ -33,6 +33,7 @@
 
 #include <string.h>
 #include "general.h"
+#include "spi.h"
 #include "sfdp_internal.h"
 
 #ifdef MIN
@@ -46,8 +47,8 @@ static inline void sfdp_debug_print(const uint32_t address, const void *const bu
 	DEBUG_INFO("%" PRIu32 " byte SFDP read at 0x%" PRIx32 ":\n", length, address);
 	const uint8_t *const data = buffer;
 	for (size_t i = 0; i < length; i += 8U) {
-		DEBUG_INFO("\t%02x %02x %02x %02x %02x %02x %02x %02x\n", data[i + 0], data[i + 1], data[i + 2], data[i + 3],
-			data[i + 4], data[i + 5], data[i + 6], data[i + 7]);
+		DEBUG_INFO("\t%02x %02x %02x %02x %02x %02x %02x %02x\n", data[i], data[i + 1U], data[i + 2U], data[i + 3U],
+			data[i + 4U], data[i + 5U], data[i + 6U], data[i + 7U]);
 	}
 #else
 	(void)address;
@@ -64,12 +65,12 @@ static inline size_t sfdp_memory_density_to_capacity_bits(const uint8_t *const d
 		return SFDP_DENSITY_VALUE(density) + 1U;
 }
 
-static spi_parameters_s sfdp_read_basic_parameter_table(target *const t, const uint32_t address, const size_t length,
-	const read_sfdp_func sfdp_read)
+static spi_parameters_s sfdp_read_basic_parameter_table(
+	target_s *const target, const uint32_t address, const size_t length, const spi_read_func spi_read)
 {
 	sfdp_basic_parameter_table_s parameter_table;
 	const size_t table_length = MIN(sizeof(sfdp_basic_parameter_table_s), length);
-	sfdp_read(t, address, &parameter_table, table_length);
+	spi_read(target, SPI_FLASH_CMD_READ_SFDP, address, &parameter_table, table_length);
 
 	spi_parameters_s result;
 	result.capacity = sfdp_memory_density_to_capacity_bits(parameter_table.memory_density) >> 3U;
@@ -85,23 +86,24 @@ static spi_parameters_s sfdp_read_basic_parameter_table(target *const t, const u
 	return result;
 }
 
-bool sfdp_read_parameters(target *const t, spi_parameters_s *params, const read_sfdp_func sfdp_read)
+bool sfdp_read_parameters(target_s *const target, spi_parameters_s *params, const spi_read_func spi_read)
 {
 	sfdp_header_s header;
-	sfdp_read(t, SFDP_HEADER_ADDRESS, &header, sizeof(header));
+	spi_read(target, SPI_FLASH_CMD_READ_SFDP, SFDP_HEADER_ADDRESS, &header, sizeof(header));
 	sfdp_debug_print(SFDP_HEADER_ADDRESS, &header, sizeof(header));
 	if (memcmp(header.magic, SFDP_MAGIC, 4) != 0)
 		return false;
 
 	for (size_t i = 0; i <= header.parameter_headers_count; ++i) {
 		sfdp_parameter_table_header_s table_header;
-		sfdp_read(t, SFDP_TABLE_HEADER_ADDRESS + (sizeof(table_header) * i), &table_header, sizeof(table_header));
+		spi_read(target, SPI_FLASH_CMD_READ_SFDP, SFDP_TABLE_HEADER_ADDRESS + (sizeof(table_header) * i), &table_header,
+			sizeof(table_header));
 		sfdp_debug_print(SFDP_TABLE_HEADER_ADDRESS + (sizeof(table_header) * i), &table_header, sizeof(table_header));
 		const uint16_t jedec_parameter_id = SFDP_JEDEC_PARAMETER_ID(table_header);
 		if (jedec_parameter_id == SFDP_BASIC_SPI_PARAMETER_TABLE) {
 			const uint32_t table_address = SFDP_TABLE_ADDRESS(table_header);
 			const uint16_t table_length = table_header.table_length_in_u32s * 4U;
-			*params = sfdp_read_basic_parameter_table(t, table_address, table_length, sfdp_read);
+			*params = sfdp_read_basic_parameter_table(target, table_address, table_length, spi_read);
 			return true;
 		}
 	}

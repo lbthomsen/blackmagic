@@ -22,13 +22,16 @@
 #define INCLUDE_GENERAL_H
 
 #ifndef _GNU_SOURCE
+// NOLINTNEXTLINE(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp)
 #define _GNU_SOURCE
 #endif
 #ifndef _DEFAULT_SOURCE
+// NOLINTNEXTLINE(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp)
 #define _DEFAULT_SOURCE
 #endif
 #if !defined(__USE_MINGW_ANSI_STDIO)
-# define __USE_MINGW_ANSI_STDIO 1
+// NOLINTNEXTLINE(bugprone-reserved-identifier,cert-dcl37-c,cert-dcl51-cpp)
+#define __USE_MINGW_ANSI_STDIO 1
 #endif
 #include <stdint.h>
 #include <stdbool.h>
@@ -39,144 +42,74 @@
 #include <inttypes.h>
 #include <sys/types.h>
 
-#include "platform.h"
+#include "maths_utils.h"
+#include "timing.h"
 #include "platform_support.h"
 
 #ifndef ARRAY_LENGTH
-#define ARRAY_LENGTH(arr) (sizeof(arr) / sizeof(arr[0]))
+#define ARRAY_LENGTH(arr) (sizeof(arr) / sizeof((arr)[0]))
 #endif
 
 extern uint32_t delay_cnt;
 
-enum BMP_DEBUG {
-	BMP_DEBUG_NONE   =  0,
-	BMP_DEBUG_INFO   =  1,
-	BMP_DEBUG_GDB    =  2,
-	BMP_DEBUG_TARGET =  4,
-	BMP_DEBUG_PROBE =  8,
-	BMP_DEBUG_WIRE   = 0x10,
-	BMP_DEBUG_MAX    = 0x20,
-	BMP_DEBUG_STDOUT = 0x8000,
-};
-
-#define FREQ_FIXED 0xffffffff
+#define FREQ_FIXED 0xffffffffU
 
 #if PC_HOSTED == 0
-/* For BMP debug output on a firmware BMP platform, using
- * BMP PC-Hosted is the preferred way. Printing DEBUG_WARN
- * and DEBUG_INFO is kept for comptibiluty.
+/*
+ * XXX: This entire system needs replacing with something better thought out
+ *
+ * When built as firmware, if the target supports debugging, DEBUG_ERROR, DEBUG_WARN and
+ * DEBUG_INFO get defined to a macro that turns them into printf() calls. The rest of the
+ * levels turn into no-ops.
+ *
+ * When built as BMDA, the debug macros all turn into various kinds of console-printing
+ * function, w/ gating for diagnostics other than warnings and info.
+ *
+ * XXX: This is not really the proper place for all this as this is too intrusive into
+ * the rest of the code base. The correct way to do this would be to define a debug
+ * logging layer and allow BMDA to override the default logging subsystem via
+ * weak symbols. This would also allow a user to choose to compile, eg, wire
+ * debugging into the firmware which may be useful for development.
  */
-# if !defined(PLATFORM_PRINTF)
-#  define PLATFORM_PRINTF printf
-# endif
-# if defined(ENABLE_DEBUG)
-#  define DEBUG_WARN PLATFORM_PRINTF
-#  define DEBUG_INFO PLATFORM_PRINTF
-# else
-#  define DEBUG_WARN(...) do {} while(0)
-#  define DEBUG_INFO(...) do {} while(0)
-# endif
-# define DEBUG_GDB(...) do {} while(0)
-# define DEBUG_TARGET(...) do {} while(0)
-# define DEBUG_PROBE(...) do {} while(0)
-# define DEBUG_WIRE(...) do {} while(0)
-# define DEBUG_GDB_WIRE(...) do {} while(0)
+#if !defined(PLATFORM_PRINTF)
+#define PLATFORM_PRINTF printf
+#endif
+#define PRINT_NOOP(...) \
+	do {                \
+	} while (false)
+#if defined(ENABLE_DEBUG)
+#define DEBUG_ERROR(...) PLATFORM_PRINTF(__VA_ARGS__)
+#define DEBUG_WARN(...)  PLATFORM_PRINTF(__VA_ARGS__)
+#define DEBUG_INFO(...)  PLATFORM_PRINTF(__VA_ARGS__)
+#else
+#define DEBUG_ERROR(...) PRINT_NOOP(__VA_ARGS__)
+#define DEBUG_WARN(...)  PRINT_NOOP(__VA_ARGS__)
+#define DEBUG_INFO(...)  PRINT_NOOP(__VA_ARGS__)
+#endif
+#define DEBUG_GDB(...)    PRINT_NOOP(__VA_ARGS__)
+#define DEBUG_TARGET(...) PRINT_NOOP(__VA_ARGS__)
+#define DEBUG_PROTO(...)  PRINT_NOOP(__VA_ARGS__)
+#define DEBUG_PROBE(...)  PRINT_NOOP(__VA_ARGS__)
+#define DEBUG_WIRE(...)   PRINT_NOOP(__VA_ARGS__)
 
 void debug_serial_send_stdout(const uint8_t *data, size_t len);
 #else
-# include <stdarg.h>
-extern int cl_debuglevel;
+#include "debug.h"
 
-static inline void DEBUG_WARN(const char *format, ...)
-{
-	va_list ap;
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-	return;
-}
-
-static inline void DEBUG_INFO(const char *format, ...)
-{
-	if (~cl_debuglevel & BMP_DEBUG_INFO)
-		return;
-	va_list ap;
-    va_start(ap, format);
-	if (cl_debuglevel & BMP_DEBUG_STDOUT)
-		vfprintf(stdout, format, ap);
-	else
-		vfprintf(stderr, format, ap);
-    va_end(ap);
-	return;
-}
-
-static inline void DEBUG_GDB(const char *format, ...)
-{
-	if (~cl_debuglevel & BMP_DEBUG_GDB)
-		return;
-	va_list ap;
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-	return;
-}
-
-static inline void DEBUG_GDB_WIRE(const char *format, ...)
-{
-	if ((cl_debuglevel & (BMP_DEBUG_GDB | BMP_DEBUG_WIRE)) !=
-		(BMP_DEBUG_GDB | BMP_DEBUG_WIRE))
-		return;
-	va_list ap;
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-	return;
-}
-
-static inline void DEBUG_TARGET(const char *format, ...)
-{
-	if (~cl_debuglevel & BMP_DEBUG_TARGET)
-		return;
-	va_list ap;
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-	return;
-}
-
-static inline void DEBUG_PROBE(const char *format, ...)
-{
-	if (~cl_debuglevel & BMP_DEBUG_PROBE)
-		return;
-	va_list ap;
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-	return;
-}
-
-static inline void DEBUG_WIRE(const char *format, ...)
-{
-	if (~cl_debuglevel & BMP_DEBUG_WIRE)
-		return;
-	va_list ap;
-    va_start(ap, format);
-    vfprintf(stderr, format, ap);
-    va_end(ap);
-	return;
-}
+#define DEBUG_ERROR(...)  debug_error(__VA_ARGS__)
+#define DEBUG_WARN(...)   debug_warning(__VA_ARGS__)
+#define DEBUG_INFO(...)   debug_info(__VA_ARGS__)
+#define DEBUG_GDB(...)    debug_gdb(__VA_ARGS__)
+#define DEBUG_TARGET(...) debug_target(__VA_ARGS__)
+#define DEBUG_PROTO(...)  debug_protocol(__VA_ARGS__)
+#define DEBUG_PROBE(...)  debug_probe(__VA_ARGS__)
+#define DEBUG_WIRE(...)   debug_wire(__VA_ARGS__)
 #endif
 
-#define ALIGN(x, n) (((x) + (n) - 1) & ~((n) - 1))
+#define ALIGN(x, n) (((x) + (n)-1) & ~((n)-1))
 #undef MIN
-#define MIN(x, y)  (((x) < (y)) ? (x) : (y))
+#define MIN(x, y) (((x) < (y)) ? (x) : (y))
 #undef MAX
-#define MAX(x, y)  (((x) > (y)) ? (x) : (y))
-
-#if !defined(SYSTICKHZ)
-# define SYSTICKHZ 100
-#endif
-#define SYSTICKMS (1000 / SYSTICKHZ)
-#define MORSECNT ((SYSTICKHZ / 10) - 1)
+#define MAX(x, y) (((x) > (y)) ? (x) : (y))
 
 #endif /* INCLUDE_GENERAL_H */

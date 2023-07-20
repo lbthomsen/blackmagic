@@ -18,7 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4)
+#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4) || defined(STM32F7)
 #include <libopencm3/stm32/rcc.h>
 #include <libopencm3/stm32/usart.h>
 #include <libopencm3/stm32/dma.h>
@@ -30,12 +30,13 @@
 #error "Unknown processor target"
 #endif
 #include <libopencm3/cm3/nvic.h>
-#include <libopencm3/usb/usbd.h>
-#include <libopencm3/usb/cdc.h>
 
 #include "general.h"
+#include "platform.h"
 #include "usb_serial.h"
 #include "aux_serial.h"
+
+static uint32_t aux_serial_active_baud_rate;
 
 static char aux_serial_receive_buffer[AUX_UART_BUFFER_SIZE];
 /* Fifo in pointer, writes assumed to be atomic, should be only incremented within RX ISR */
@@ -43,7 +44,7 @@ static uint8_t aux_serial_receive_write_index = 0;
 /* Fifo out pointer, writes assumed to be atomic, should be only incremented outside RX ISR */
 static uint8_t aux_serial_receive_read_index = 0;
 
-#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4)
+#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4) || defined(STM32F7)
 static char aux_serial_transmit_buffer[2U][AUX_UART_BUFFER_SIZE];
 static uint8_t aux_serial_transmit_buffer_index = 0;
 static uint8_t aux_serial_transmit_buffer_consumed = 0;
@@ -52,19 +53,19 @@ static bool aux_serial_transmit_complete = true;
 static volatile uint8_t aux_serial_led_state = 0;
 
 #ifdef DMA_STREAM0
-#define dma_channel_reset(dma, channel) dma_stream_reset(dma, channel)
-#define dma_enable_channel(dma, channel) dma_enable_stream(dma, channel)
+#define dma_channel_reset(dma, channel)   dma_stream_reset(dma, channel)
+#define dma_enable_channel(dma, channel)  dma_enable_stream(dma, channel)
 #define dma_disable_channel(dma, channel) dma_disable_stream(dma, channel)
 
 #define DMA_PSIZE_8BIT DMA_SxCR_PSIZE_8BIT
 #define DMA_MSIZE_8BIT DMA_SxCR_MSIZE_8BIT
-#define DMA_PL_HIGH	DMA_SxCR_PL_HIGH
-#define DMA_CGIF DMA_ISR_FLAGS
+#define DMA_PL_HIGH    DMA_SxCR_PL_HIGH
+#define DMA_CGIF       DMA_ISR_FLAGS
 #else
 #define DMA_PSIZE_8BIT DMA_CCR_PSIZE_8BIT
 #define DMA_MSIZE_8BIT DMA_CCR_MSIZE_8BIT
-#define DMA_PL_HIGH	DMA_CCR_PL_HIGH
-#define DMA_CGIF DMA_IFCR_CGIF_BIT
+#define DMA_PL_HIGH    DMA_CCR_PL_HIGH
+#define DMA_CGIF       DMA_IFCR_CGIF_BIT
 #endif
 #elif defined(LM4F)
 static char aux_serial_transmit_buffer[AUX_UART_BUFFER_SIZE];
@@ -77,12 +78,23 @@ static char aux_serial_transmit_buffer[AUX_UART_BUFFER_SIZE];
 #define USART_PARITY_ODD   UART_PARITY_ODD
 #define USART_PARITY_EVEN  UART_PARITY_EVEN
 
+#define usart_enable(uart)                 uart_enable(uart)
+#define usart_disable(uart)                uart_disable(uart)
 #define usart_set_baudrate(uart, baud)     uart_set_baudrate(uart, baud)
+#define usart_get_databits(uart)           uart_get_databits(uart)
+#define usart_get_stopbits(uart)           uart_get_stopbits(uart)
 #define usart_set_stopbits(uart, stopbits) uart_set_stopbits(uart, stopbits)
+#define usart_get_parity(uart)             uart_get_parity(uart)
 #define usart_set_parity(uart, parity)     uart_set_parity(uart, parity)
 #endif
 
-#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4)
+static void aux_serial_set_baudrate(const uint32_t baud_rate)
+{
+	usart_set_baudrate(USBUSART, baud_rate);
+	aux_serial_active_baud_rate = baud_rate;
+}
+
+#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4) || defined(STM32F7)
 void aux_serial_init(void)
 {
 	/* Enable clocks */
@@ -91,7 +103,7 @@ void aux_serial_init(void)
 
 	/* Setup UART parameters */
 	UART_PIN_SETUP();
-	usart_set_baudrate(USBUSART, 38400);
+	aux_serial_set_baudrate(38400);
 	usart_set_databits(USBUSART, 8);
 	usart_set_stopbits(USBUSART, USART_STOPBITS_1);
 	usart_set_mode(USBUSART, USART_MODE_TX_RX);
@@ -101,14 +113,14 @@ void aux_serial_init(void)
 
 	/* Setup USART TX DMA */
 #if !defined(USBUSART_TDR) && defined(USBUSART_DR)
-# define USBUSART_TDR USBUSART_DR
+#define USBUSART_TDR USBUSART_DR
 #elif !defined(USBUSART_TDR)
-# define USBUSART_TDR USART_DR(USBUSART)
+#define USBUSART_TDR USART_DR(USBUSART)
 #endif
 #if !defined(USBUSART_RDR) && defined(USBUSART_DR)
-# define USBUSART_RDR USBUSART_DR
+#define USBUSART_RDR USBUSART_DR
 #elif !defined(USBUSART_RDR)
-# define USBUSART_RDR USART_DR(USBUSART)
+#define USBUSART_RDR USART_DR(USBUSART)
 #endif
 	dma_channel_reset(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN);
 	dma_set_peripheral_address(USBUSART_DMA_BUS, USBUSART_DMA_TX_CHAN, (uintptr_t)&USBUSART_TDR);
@@ -183,7 +195,7 @@ void aux_serial_init(void)
 
 	/* Setup UART parameters. */
 	uart_clock_from_sysclk(USBUART);
-	uart_set_baudrate(USBUART, 38400);
+	aux_serial_set_baudrate(38400);
 	uart_set_databits(USBUART, 8);
 	uart_set_stopbits(USBUART, 1);
 	uart_set_parity(USBUART, UART_PARITY_NONE);
@@ -198,7 +210,7 @@ void aux_serial_init(void)
 	uart_clear_interrupt_flag(USBUART, UART_INT_RX | UART_INT_RT);
 
 	/* Enable interrupts */
-	uart_enable_interrupts(UART0, UART_INT_RX| UART_INT_RT);
+	uart_enable_interrupts(UART0, UART_INT_RX | UART_INT_RT);
 
 	/* Finally enable the USART. */
 	uart_enable(USBUART);
@@ -208,47 +220,95 @@ void aux_serial_init(void)
 }
 #endif
 
-void aux_serial_set_encoding(struct usb_cdc_line_coding *coding)
+void aux_serial_set_encoding(const usb_cdc_line_coding_s *const coding)
 {
-	usart_set_baudrate(USBUSART, coding->dwDTERate);
+	/* Some devices require that the usart is disabled before
+	 * changing the usart registers. */
+	usart_disable(USBUSART);
+	aux_serial_set_baudrate(coding->dwDTERate);
 
-#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4)
-	if (coding->bParityType)
-		usart_set_databits(USBUSART, (coding->bDataBits + 1 <= 8 ? 8 : 9));
+#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4) || defined(STM32F7)
+	if (coding->bParityType != USB_CDC_NO_PARITY)
+		usart_set_databits(USBUSART, coding->bDataBits + 1U <= 8U ? 8 : 9);
 	else
-		usart_set_databits(USBUSART, (coding->bDataBits <= 8 ? 8 : 9));
+		usart_set_databits(USBUSART, coding->bDataBits <= 8U ? 8 : 9);
 #elif defined(LM4F)
 	uart_set_databits(USBUART, coding->bDataBits);
 #endif
 
-	switch(coding->bCharFormat) {
-	case 0:
-		usart_set_stopbits(USBUSART, USART_STOPBITS_1);
+	uint32_t stop_bits = USART_STOPBITS_2;
+	switch (coding->bCharFormat) {
+	case USB_CDC_1_STOP_BITS:
+		stop_bits = USART_STOPBITS_1;
 		break;
-	case 1:
-		usart_set_stopbits(USBUSART, USART_STOPBITS_1_5);
+	case USB_CDC_1_5_STOP_BITS:
+		stop_bits = USART_STOPBITS_1_5;
 		break;
-	case 2:
+	case USB_CDC_2_STOP_BITS:
 	default:
-		usart_set_stopbits(USBUSART, USART_STOPBITS_2);
 		break;
 	}
+	usart_set_stopbits(USBUSART, stop_bits);
 
-	switch(coding->bParityType) {
-	case 0:
+	switch (coding->bParityType) {
+	case USB_CDC_NO_PARITY:
+	default:
 		usart_set_parity(USBUSART, USART_PARITY_NONE);
 		break;
-	case 1:
+	case USB_CDC_ODD_PARITY:
 		usart_set_parity(USBUSART, USART_PARITY_ODD);
 		break;
-	case 2:
-	default:
+	case USB_CDC_EVEN_PARITY:
 		usart_set_parity(USBUSART, USART_PARITY_EVEN);
 		break;
 	}
+	usart_enable(USBUSART);
 }
 
-#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4)
+void aux_serial_get_encoding(usb_cdc_line_coding_s *const coding)
+{
+	coding->dwDTERate = aux_serial_active_baud_rate;
+
+	switch (usart_get_stopbits(USBUSART)) {
+	case USART_STOPBITS_1:
+		coding->bCharFormat = USB_CDC_1_STOP_BITS;
+		break;
+#if !defined(LM4F)
+	/*
+	 * Only include this back mapping on non-Tiva-C platforms as USART_STOPBITS_1 and
+	 * USART_STOPBITS_1_5 are the same thing on LM4F
+	 */
+	case USART_STOPBITS_1_5:
+		coding->bCharFormat = USB_CDC_1_5_STOP_BITS;
+		break;
+#endif
+	case USART_STOPBITS_2:
+	default:
+		coding->bCharFormat = USB_CDC_2_STOP_BITS;
+		break;
+	}
+
+	switch (usart_get_parity(USBUSART)) {
+	case USART_PARITY_NONE:
+	default:
+		coding->bParityType = USB_CDC_NO_PARITY;
+		break;
+	case USART_PARITY_ODD:
+		coding->bParityType = USB_CDC_ODD_PARITY;
+		break;
+	case USART_PARITY_EVEN:
+		coding->bParityType = USB_CDC_EVEN_PARITY;
+		break;
+	}
+
+	const uint32_t data_bits = usart_get_databits(USBUSART);
+	if (coding->bParityType == USB_CDC_NO_PARITY)
+		coding->bDataBits = data_bits;
+	else
+		coding->bDataBits = data_bits - 1;
+}
+
+#if defined(STM32F0) || defined(STM32F1) || defined(STM32F3) || defined(STM32F4) || defined(STM32F7)
 void aux_serial_set_led(const aux_serial_led_e led)
 {
 	aux_serial_led_state |= led;
@@ -285,7 +345,7 @@ void aux_serial_switch_transmit_buffers(void)
 
 	/* Change active buffer */
 	aux_serial_transmit_buffer_consumed = 0;
-	aux_serial_transmit_buffer_index ^= 1;
+	aux_serial_transmit_buffer_index ^= 1U;
 }
 
 void aux_serial_send(const size_t len)
@@ -293,8 +353,7 @@ void aux_serial_send(const size_t len)
 	aux_serial_transmit_buffer_consumed += len;
 
 	/* If DMA is idle, schedule new transfer */
-	if (len && aux_serial_transmit_complete)
-	{
+	if (len && aux_serial_transmit_complete) {
 		aux_serial_transmit_complete = false;
 		aux_serial_switch_transmit_buffers();
 		aux_serial_set_led(AUX_SERIAL_LED_TX);
@@ -335,7 +394,7 @@ static void aux_serial_receive_isr(const uint32_t usart, const uint8_t dma_irq)
 
 	/* If line is now idle, then transmit a packet */
 	if (is_idle) {
-#ifdef USART_ICR
+#ifdef USART_ICR_IDLECF
 		USART_ICR(usart) = USART_ICR_IDLECF;
 #endif
 		debug_serial_run();
@@ -475,7 +534,7 @@ size_t aux_serial_transmit_buffer_fullness(void)
 
 void aux_serial_send(const size_t len)
 {
-	for(size_t i = 0; i < len; ++i)
+	for (size_t i = 0; i < len; ++i)
 		uart_send_blocking(USBUART, aux_serial_transmit_buffer[i]);
 }
 
@@ -494,7 +553,7 @@ void USBUART_ISR(void)
 		/* If the next increment of rx_in would put it at the same point
 		* as rx_out, the FIFO is considered full.
 		*/
-		if (((aux_serial_receive_write_index + 1) % AUX_UART_BUFFER_SIZE) != aux_serial_receive_read_index) {
+		if (((aux_serial_receive_write_index + 1U) % AUX_UART_BUFFER_SIZE) != aux_serial_receive_read_index) {
 			/* insert into FIFO */
 			aux_serial_receive_buffer[aux_serial_receive_write_index++] = c;
 

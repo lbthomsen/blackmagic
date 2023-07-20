@@ -18,14 +18,14 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 
-/* This file implements the platform specific functions for the STM32
- * implementation.
- */
+/* This file implements the platform specific functions for the 96Boards Carbon implementation. */
 
 #include "general.h"
+#include "platform.h"
 #include "usb.h"
 #include "aux_serial.h"
 #include "morse.h"
+#include "exception.h"
 
 #include <libopencm3/stm32/f4/rcc.h>
 #include <libopencm3/cm3/scb.h>
@@ -36,6 +36,11 @@
 #include <libopencm3/usb/usbd.h>
 
 jmp_buf fatal_error_jmpbuf;
+
+int platform_hwversion(void)
+{
+	return 0;
+}
 
 void platform_init(void)
 {
@@ -49,16 +54,13 @@ void platform_init(void)
 	rcc_periph_clock_enable(RCC_GPIOD);
 	rcc_periph_clock_enable(RCC_CRC);
 
-	/* Set up USB Pins and alternate function*/
+	/* Set up USB Pins and alternate function */
 	gpio_mode_setup(GPIOA, GPIO_MODE_AF, GPIO_PUPD_NONE, GPIO11 | GPIO12);
 	gpio_set_af(GPIOA, GPIO_AF10, GPIO11 | GPIO12);
 
-	gpio_mode_setup(JTAG_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE,
-			TMS_PIN | TCK_PIN | TDI_PIN);
-	gpio_set_output_options(JTAG_PORT, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ,
-			TMS_PIN | TCK_PIN | TDI_PIN);
-        gpio_mode_setup(TDO_PORT, GPIO_MODE_INPUT, GPIO_PUPD_NONE,
-			TDO_PIN);
+	gpio_mode_setup(JTAG_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, TMS_PIN | TCK_PIN | TDI_PIN);
+	gpio_set_output_options(JTAG_PORT, GPIO_OTYPE_PP, GPIO_OSPEED_50MHZ, TMS_PIN | TCK_PIN | TDI_PIN);
+	gpio_mode_setup(TDO_PORT, GPIO_MODE_INPUT, GPIO_PUPD_NONE, TDO_PIN);
 
 	gpio_mode_setup(TRST_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, TRST_PIN);
 	gpio_mode_setup(NRST_PORT, GPIO_MODE_OUTPUT, GPIO_PUPD_NONE, NRST_PIN);
@@ -98,11 +100,35 @@ void platform_request_boot(void)
 
 	/* Jump to the built in bootloader by mapping System flash */
 	rcc_periph_clock_enable(RCC_SYSCFG);
-	SYSCFG_MEMRM &= ~3;
-	SYSCFG_MEMRM |=  1;
+	SYSCFG_MEMRM &= ~3U;
+	SYSCFG_MEMRM |= 1U;
 }
 
 void platform_target_clk_output_enable(bool enable)
 {
 	(void)enable;
+}
+
+bool platform_spi_init(const spi_bus_e bus)
+{
+	(void)bus;
+	return false;
+}
+
+bool platform_spi_deinit(const spi_bus_e bus)
+{
+	(void)bus;
+	return false;
+}
+
+bool platform_spi_chip_select(const uint8_t device_select)
+{
+	(void)device_select;
+	return false;
+}
+
+uint8_t platform_spi_xfer(const spi_bus_e bus, const uint8_t value)
+{
+	(void)bus;
+	return value;
 }

@@ -3,14 +3,21 @@ PLATFORM_DIR = platforms/$(PROBE_HOST)
 VPATH += $(PLATFORM_DIR) target
 ENABLE_DEBUG ?=
 
+SYS = $(shell $(CC) -dumpmachine)
+
 ifneq ($(V), 1)
 MAKEFLAGS += --no-print-dir
 Q := @
 endif
 
-CFLAGS += -Wall -Wextra -Werror -Wno-char-subscripts \
+CFLAGS += -Wall -Wextra -Werror -Wreturn-type \
+	-Wno-char-subscripts \
 	-std=c11 -g3 -MD -I./target \
 	-I. -Iinclude -I$(PLATFORM_DIR)
+
+ifeq (filter, macosx darwin, $(SYS))
+CFLAGS += -Wmaybe-uninitialized -Wstringop-overflow -Wunsafe-loop-optimizations
+endif
 
 ifeq ($(ENABLE_DEBUG), 1)
 CFLAGS += -DENABLE_DEBUG
@@ -18,8 +25,8 @@ endif
 
 SRC =              \
 	adiv5.c        \
-	adiv5_jtagdp.c \
-	adiv5_swdp.c   \
+	adiv5_jtag.c   \
+	adiv5_swd.c    \
 	command.c      \
 	cortexa.c      \
 	cortexm.c      \
@@ -32,6 +39,8 @@ SRC =              \
 	gdb_packet.c   \
 	gdb_reg.c      \
 	hex_utils.c    \
+	hc32l110.c     \
+	imxrt.c        \
 	jtag_devs.c    \
 	jtag_scan.c    \
 	lmi.c          \
@@ -39,15 +48,18 @@ SRC =              \
 	lpc11xx.c      \
 	lpc17xx.c      \
 	lpc15xx.c      \
+	lpc40xx.c      \
 	lpc43xx.c      \
 	lpc546xx.c     \
+	lpc55xx.c      \
 	kinetis.c      \
 	main.c         \
+	maths_utils.c  \
 	morse.c        \
-	msp432.c       \
+	msp432e4.c     \
+	msp432p4.c     \
 	nrf51.c        \
 	nxpke04.c      \
-	platform.c     \
 	remote.c       \
 	rp.c           \
 	sam3x.c        \
@@ -55,9 +67,11 @@ SRC =              \
 	samd.c         \
 	samx5x.c       \
 	sfdp.c         \
+	spi.c          \
 	stm32f1.c      \
 	ch32f1.c       \
 	stm32f4.c      \
+	stm32h5.c      \
 	stm32h7.c      \
 	stm32l0.c      \
 	stm32l4.c      \
@@ -67,7 +81,9 @@ SRC =              \
 	target_flash.c \
 	target_probe.c
 
+ifeq (,$(filter all_platforms,$(MAKECMDGOALS)))
 include $(PLATFORM_DIR)/Makefile.inc
+endif
 
 ifneq ($(PC_HOSTED),1)
 # Output memory usage information
@@ -132,10 +148,18 @@ endif
 
 .PHONY:	clean host_clean all_platforms clang-format FORCE
 
+
+GIT_VERSION := $(shell if [ -e "../.git" ]; then git describe --always --dirty --tags; fi)
+
 clean:	host_clean
 	$(Q)echo "  CLEAN"
 	-$(Q)$(RM) *.o *.d *.elf *~ $(TARGET) $(HOSTFILES)
-	-$(Q)$(RM) platforms/*/*.o platforms/*/*.d mapfile include/version.h
+	-$(Q)$(RM) platforms/*/*.o platforms/*/*.d mapfile ftd2xx.dll
+ifeq ($(GIT_VERSION),)
+	@echo Git not found, not deleting include/version.h
+else
+	-$(Q)$(RM) include/version.h
+endif
 
 all_platforms:
 	$(Q)if [ ! -f ../libopencm3/Makefile ]; then \
@@ -179,7 +203,6 @@ all_platforms:
 
 command.c: include/version.h
 
-GIT_VERSION := $(shell git describe --always --dirty --tags)
 VERSION_HEADER := \#define FIRMWARE_VERSION "$(GIT_VERSION)"
 
 include/version.h: FORCE
@@ -191,7 +214,7 @@ else
 	@# to the file. This is fine and probably makes the file more human-readable, but
 	@# also means we have to account for that newline in this comparison.
 	$(Q)if [ ! -f $@ ] || [ "$$(cat $@)" != "$$(echo '$(VERSION_HEADER)\n')" ]; then \
-		echo " GEN $@"; \
+		echo " GEN      $@"; \
 		echo '$(VERSION_HEADER)' > $@; \
 	fi
 endif
@@ -199,4 +222,6 @@ endif
 clang-format:
 	$(Q)clang-format -i *.c */*.c */*/*.c *.h */*.h */*/*.h
 
+ifeq (,$(filter clean,$(MAKECMDGOALS)))
 -include *.d
+endif

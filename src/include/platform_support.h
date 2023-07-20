@@ -21,25 +21,33 @@
 #define INCLUDE_PLATFORM_SUPPORT_H
 
 #ifndef INCLUDE_GENERAL_H
-#	error "Include 'general.h' instead"
+#error "Include 'general.h' instead"
 #endif
 
+#if PC_HOSTED == 0
+#include "stdio_newlib.h"
+#endif
 #include "target.h"
+#include "spi_types.h"
 
 #if PC_HOSTED == 1
 void platform_init(int argc, char **argv);
 void platform_pace_poll(void);
 #else
 void platform_init(void);
-inline void platform_pace_poll(void) { }
+
+inline void platform_pace_poll(void)
+{
+}
 #endif
 
-typedef struct platform_timeout platform_timeout;
-void platform_timeout_set(platform_timeout *t, uint32_t ms);
-bool platform_timeout_is_expired(platform_timeout *t);
+typedef struct platform_timeout platform_timeout_s;
+void platform_timeout_set(platform_timeout_s *target, uint32_t ms);
+bool platform_timeout_is_expired(const platform_timeout_s *target);
 void platform_delay(uint32_t ms);
 
-#define POWER_CONFLICT_THRESHOLD	5 /* in 0.1V, so 5 stands for 0.5V */
+#define POWER_CONFLICT_THRESHOLD 5U /* in 0.1V, so 5 stands for 0.5V */
+
 extern bool connect_assert_nrst;
 uint32_t platform_target_voltage_sense(void);
 const char *platform_target_voltage(void);
@@ -53,5 +61,13 @@ void platform_max_frequency_set(uint32_t frequency);
 uint32_t platform_max_frequency_get(void);
 
 void platform_target_clk_output_enable(bool enable);
+
+#if PC_HOSTED == 0
+bool platform_spi_init(spi_bus_e bus);
+bool platform_spi_deinit(spi_bus_e bus);
+
+bool platform_spi_chip_select(uint8_t device_select);
+uint8_t platform_spi_xfer(spi_bus_e bus, uint8_t value);
+#endif
 
 #endif /* INCLUDE_PLATFORM_SUPPORT_H */

@@ -37,39 +37,50 @@
 
 #include "timing.h"
 
-char *platform_ident(void);
+char *bmda_adaptor_ident(void);
 void platform_buffer_flush(void);
 
-#define PLATFORM_IDENT     "(PC-Hosted) "
-#define SET_IDLE_STATE(x)
-#define SET_RUN_STATE(x)
+#define PLATFORM_IDENT "(Black Magic Debug App) "
+#define SET_IDLE_STATE(x) \
+	do {                  \
+	} while (0)
+#define SET_RUN_STATE(x) \
+	do {                 \
+	} while (0)
 #define PLATFORM_HAS_POWER_SWITCH
 
-#define SYSTICKHZ 1000
+#define VENDOR_ID_BMP     0x1d50U
+#define PRODUCT_ID_BMP_BL 0x6017U
+#define PRODUCT_ID_BMP    0x6018U
 
-#define VENDOR_ID_BMP            0x1d50
-#define PRODUCT_ID_BMP_BL        0x6017
-#define PRODUCT_ID_BMP           0x6018
+#define VENDOR_ID_STLINK           0x0483U
+#define PRODUCT_ID_STLINK_MASK     0xffe0U
+#define PRODUCT_ID_STLINK_GROUP    0x3740U
+#define PRODUCT_ID_STLINKV1        0x3744U
+#define PRODUCT_ID_STLINKV2        0x3748U
+#define PRODUCT_ID_STLINKV21       0x374bU
+#define PRODUCT_ID_STLINKV21_MSD   0x3752U
+#define PRODUCT_ID_STLINKV3_NO_MSD 0x3754U
+#define PRODUCT_ID_STLINKV3_BL     0x374dU
+#define PRODUCT_ID_STLINKV3        0x374fU
+#define PRODUCT_ID_STLINKV3E       0x374eU
 
-#define VENDOR_ID_STLINK		 0x0483
-#define PRODUCT_ID_STLINK_MASK	 0xffe0
-#define PRODUCT_ID_STLINK_GROUP  0x3740
-#define PRODUCT_ID_STLINKV1		 0x3744
-#define PRODUCT_ID_STLINKV2		 0x3748
-#define PRODUCT_ID_STLINKV21	 0x374b
-#define PRODUCT_ID_STLINKV21_MSD 0x3752
-#define PRODUCT_ID_STLINKV3_NO_MSD 0x3754
-#define PRODUCT_ID_STLINKV3_BL	 0x374d
-#define PRODUCT_ID_STLINKV3		 0x374f
-#define PRODUCT_ID_STLINKV3E	 0x374e
+#define VENDOR_ID_SEGGER   0x1366U
+#define PRODUCT_ID_UNKNOWN 0xffffU
 
-#define VENDOR_ID_SEGGER         0x1366
+#define VENDOR_ID_FTDI         0x0403U
+#define PRODUCT_ID_FTDI_FT2232 0x6010U
+#define PRODUCT_ID_FTDI_FT4232 0x6011U
+#define PRODUCT_ID_FTDI_FT232  0x6014U
+
+#define VENDOR_ID_ORBCODE   0x1209U
+#define PRODUCT_ID_ORBTRACE 0x3443U
 
 typedef enum bmp_type_e {
 	BMP_TYPE_NONE = 0,
 	BMP_TYPE_BMP,
-	BMP_TYPE_STLINKV2,
-	BMP_TYPE_LIBFTDI,
+	BMP_TYPE_STLINK_V2,
+	BMP_TYPE_FTDI,
 	BMP_TYPE_CMSIS_DAP,
 	BMP_TYPE_JLINK
 } bmp_type_t;

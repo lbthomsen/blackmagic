@@ -1,5 +1,5 @@
 ---
-Checks: 'bugprone-*,cert-*,clang-analyzer-*,misc-*,modernize-*,portability-*,performance-*,readability-*,-readability-magic-numbers,-readability-braces-around-statements,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling'
+Checks: 'bugprone-*,cert-*,clang-analyzer-*,misc-*,modernize-*,portability-*,performance-*,readability-*,-readability-magic-numbers,-readability-braces-around-statements,-clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,-modernize-macro-to-enum,-bugprone-easily-swappable-parameters'
 FormatStyle: 'none'
 HeaderFilterRegex: '(src|upgrade)/.+'
 AnalyzeTemporaryDtors: false
@@ -25,5 +25,9 @@ CheckOptions:
   - key:   modernize-use-nullptr.NullMacros
     value: 'NULL'
   - key:   readability-braces-around-statements.ShortStatementLines
+    value: '2'
+  - key:   readability-identifier-length.MinimumVariableNameLength
+    value: '2'
+  - key:   readability-identifier-length.MinimumParameterNameLength
     value: '2'
 ...
